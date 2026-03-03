@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  button,
+  input,
+  header {
+    display: none !important;
+  }
+  table {
+    border: 1px solid #111;
+  }
+}
