@@ -15,7 +15,8 @@ body {
   }
   button,
   input,
-  header {
+  header,
+  section > div[class*="filters"] {
     display: none !important;
   }
   table {

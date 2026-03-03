@@ -174,7 +174,7 @@ export default function Home() {
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold">Side Hustle</h1>
               <p className="text-sm text-slate-400">
@@ -188,7 +188,7 @@ export default function Home() {
           </div>
         </header>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
             <p className="text-xs uppercase text-slate-500">Jobs</p>
             <p className="text-2xl font-semibold">{jobs.length}</p>
@@ -209,7 +209,7 @@ export default function Home() {
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <h2 className="text-lg font-semibold">Add a job</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <input
               className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm focus:border-slate-500 outline-none"
               placeholder="Job title"
@@ -253,7 +253,7 @@ export default function Home() {
         </section>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-semibold">Jobs</h2>
             <div className="flex flex-wrap gap-2 text-xs">
               <button
@@ -304,7 +304,44 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 space-y-3 sm:hidden">
+            {sortedJobs.map((job) => (
+              <div key={job.id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className={`text-base font-semibold ${job.completed ? "line-through text-slate-500" : ""}`}>
+                      {job.title}
+                    </p>
+                    <p className="text-xs text-slate-400">{job.client}</p>
+                  </div>
+                  <p className="text-sm font-semibold">R {job.amount.toFixed(2)}</p>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    { key: "invoiced", label: "Invoiced" },
+                    { key: "started", label: "Started" },
+                    { key: "completed", label: "Completed" },
+                    { key: "paid", label: "Paid" },
+                  ].map((status) => (
+                    <label
+                      key={status.key}
+                      className="flex items-center justify-between rounded-lg border border-slate-800 px-2 py-1"
+                    >
+                      <span>{status.label}</span>
+                      <input
+                        type="checkbox"
+                        checked={job[status.key as keyof Job] as boolean}
+                        onChange={() => toggleJob(job.id, status.key as keyof Job)}
+                        className="h-4 w-4 accent-emerald-400"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 hidden overflow-x-auto sm:block">
             <table className="min-w-full text-sm">
               <thead className="text-left text-xs uppercase text-slate-400">
                 <tr>
