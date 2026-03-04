@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 type Job = {
   id: string;
@@ -11,10 +12,10 @@ type Job = {
   started: boolean;
   completed: boolean;
   paid: boolean;
-  createdAt: string;
+  created_at: string;
 };
 
-type SortKey = "title" | "client" | "amount" | "createdAt";
+type SortKey = "title" | "client" | "amount" | "created_at";
 
 type Filters = {
   showInvoiced: boolean | null;
@@ -22,41 +23,35 @@ type Filters = {
   showCompleted: boolean | null;
 };
 
-const starterJobs: Job[] = [
-  {
-    id: "1",
-    title: "Logo refresh",
-    client: "Northwind Co",
-    amount: 1200,
-    invoiced: true,
-    started: true,
-    completed: false,
-    paid: false,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    title: "Instagram content pack",
-    client: "Brightline Church",
-    amount: 650,
-    invoiced: false,
-    started: false,
-    completed: false,
-    paid: false,
-    createdAt: new Date().toISOString(),
-  },
-];
-
 export default function Home() {
-  const [jobs, setJobs] = useState<Job[]>(starterJobs);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ title: "", client: "", amount: "" });
-  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortAsc, setSortAsc] = useState(false);
   const [filters, setFilters] = useState<Filters>({
     showInvoiced: null,
     showPaid: null,
     showCompleted: null,
   });
+
+  const fetchJobs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to fetch jobs:", error.message);
+      return;
+    }
+    setJobs(data ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
 
   const totalRevenue = useMemo(
     () => jobs.reduce((sum, job) => sum + (job.paid ? job.amount : 0), 0),
@@ -102,31 +97,43 @@ export default function Home() {
     setSortAsc(true);
   }
 
-  function addJob() {
+  async function addJob() {
     if (!form.title.trim() || !form.client.trim() || !form.amount.trim()) {
       alert("Add title, client, and amount.");
       return;
     }
 
-    const newJob: Job = {
-      id: crypto.randomUUID(),
+    const { error } = await supabase.from("jobs").insert({
       title: form.title.trim(),
       client: form.client.trim(),
       amount: Number(form.amount),
-      invoiced: false,
-      started: false,
-      completed: false,
-      paid: false,
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    setJobs((prev) => [newJob, ...prev]);
+    if (error) {
+      alert("Failed to add job: " + error.message);
+      return;
+    }
+
     setForm({ title: "", client: "", amount: "" });
+    fetchJobs();
   }
 
-  function toggleJob(id: string, key: keyof Job) {
+  async function toggleJob(id: string, key: keyof Job) {
+    const job = jobs.find((j) => j.id === id);
+    if (!job) return;
+
+    const { error } = await supabase
+      .from("jobs")
+      .update({ [key]: !job[key] })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Failed to update job:", error.message);
+      return;
+    }
+
     setJobs((prev) =>
-      prev.map((job) => (job.id === id ? { ...job, [key]: !job[key] } : job))
+      prev.map((j) => (j.id === id ? { ...j, [key]: !j[key] } : j))
     );
   }
 
@@ -149,7 +156,7 @@ export default function Home() {
       job.started ? "Yes" : "No",
       job.completed ? "Yes" : "No",
       job.paid ? "Yes" : "No",
-      job.createdAt,
+      job.created_at,
     ]);
     const csv = [headers, ...rows]
       .map((line) =>
@@ -304,113 +311,121 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-4 space-y-3 sm:hidden">
-            {sortedJobs.map((job) => (
-              <div key={job.id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className={`text-base font-semibold ${job.completed ? "line-through text-slate-500" : ""}`}>
-                      {job.title}
-                    </p>
-                    <p className="text-xs text-slate-400">{job.client}</p>
-                  </div>
-                  <p className="text-sm font-semibold">R {job.amount.toFixed(2)}</p>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                  {[
-                    { key: "invoiced", label: "Invoiced" },
-                    { key: "started", label: "Started" },
-                    { key: "completed", label: "Completed" },
-                    { key: "paid", label: "Paid" },
-                  ].map((status) => (
-                    <label
-                      key={status.key}
-                      className="flex items-center justify-between rounded-lg border border-slate-800 px-2 py-1"
-                    >
-                      <span>{status.label}</span>
-                      <input
-                        type="checkbox"
-                        checked={job[status.key as keyof Job] as boolean}
-                        onChange={() => toggleJob(job.id, status.key as keyof Job)}
-                        className="h-4 w-4 accent-emerald-400"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 hidden overflow-x-auto sm:block">
-            <table className="min-w-full text-sm">
-              <thead className="text-left text-xs uppercase text-slate-400">
-                <tr>
-                  <th className="py-2 pr-4">
-                    <button onClick={() => toggleSort("title")}>
-                      Title {sortKey === "title" ? (sortAsc ? "↑" : "↓") : ""}
-                    </button>
-                  </th>
-                  <th className="py-2 pr-4">
-                    <button onClick={() => toggleSort("client")}>
-                      Client {sortKey === "client" ? (sortAsc ? "↑" : "↓") : ""}
-                    </button>
-                  </th>
-                  <th className="py-2 pr-4">
-                    <button onClick={() => toggleSort("amount")}>
-                      Amount {sortKey === "amount" ? (sortAsc ? "↑" : "↓") : ""}
-                    </button>
-                  </th>
-                  <th className="py-2 pr-4">Invoiced</th>
-                  <th className="py-2 pr-4">Started</th>
-                  <th className="py-2 pr-4">Completed</th>
-                  <th className="py-2 pr-4">Paid</th>
-                </tr>
-              </thead>
-              <tbody>
+          {loading ? (
+            <p className="mt-6 text-center text-sm text-slate-500">Loading jobs…</p>
+          ) : jobs.length === 0 ? (
+            <p className="mt-6 text-center text-sm text-slate-500">No jobs yet. Add your first one above.</p>
+          ) : (
+            <>
+              <div className="mt-4 space-y-3 sm:hidden">
                 {sortedJobs.map((job) => (
-                  <tr key={job.id} className="border-t border-slate-800">
-                    <td className={`py-3 pr-4 ${job.completed ? "line-through text-slate-500" : ""}`}>
-                      {job.title}
-                    </td>
-                    <td className="py-3 pr-4">{job.client}</td>
-                    <td className="py-3 pr-4">R {job.amount.toFixed(2)}</td>
-                    <td className="py-3 pr-4">
-                      <input
-                        type="checkbox"
-                        checked={job.invoiced}
-                        onChange={() => toggleJob(job.id, "invoiced")}
-                        className="h-4 w-4 accent-emerald-400"
-                      />
-                    </td>
-                    <td className="py-3 pr-4">
-                      <input
-                        type="checkbox"
-                        checked={job.started}
-                        onChange={() => toggleJob(job.id, "started")}
-                        className="h-4 w-4 accent-emerald-400"
-                      />
-                    </td>
-                    <td className="py-3 pr-4">
-                      <input
-                        type="checkbox"
-                        checked={job.completed}
-                        onChange={() => toggleJob(job.id, "completed")}
-                        className="h-4 w-4 accent-emerald-400"
-                      />
-                    </td>
-                    <td className="py-3 pr-4">
-                      <input
-                        type="checkbox"
-                        checked={job.paid}
-                        onChange={() => toggleJob(job.id, "paid")}
-                        className="h-4 w-4 accent-emerald-400"
-                      />
-                    </td>
-                  </tr>
+                  <div key={job.id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className={`text-base font-semibold ${job.completed ? "line-through text-slate-500" : ""}`}>
+                          {job.title}
+                        </p>
+                        <p className="text-xs text-slate-400">{job.client}</p>
+                      </div>
+                      <p className="text-sm font-semibold">R {job.amount.toFixed(2)}</p>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      {[
+                        { key: "invoiced", label: "Invoiced" },
+                        { key: "started", label: "Started" },
+                        { key: "completed", label: "Completed" },
+                        { key: "paid", label: "Paid" },
+                      ].map((status) => (
+                        <label
+                          key={status.key}
+                          className="flex items-center justify-between rounded-lg border border-slate-800 px-2 py-1"
+                        >
+                          <span>{status.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={job[status.key as keyof Job] as boolean}
+                            onChange={() => toggleJob(job.id, status.key as keyof Job)}
+                            className="h-4 w-4 accent-emerald-400"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              <div className="mt-4 hidden overflow-x-auto sm:block">
+                <table className="min-w-full text-sm">
+                  <thead className="text-left text-xs uppercase text-slate-400">
+                    <tr>
+                      <th className="py-2 pr-4">
+                        <button onClick={() => toggleSort("title")}>
+                          Title {sortKey === "title" ? (sortAsc ? "↑" : "↓") : ""}
+                        </button>
+                      </th>
+                      <th className="py-2 pr-4">
+                        <button onClick={() => toggleSort("client")}>
+                          Client {sortKey === "client" ? (sortAsc ? "↑" : "↓") : ""}
+                        </button>
+                      </th>
+                      <th className="py-2 pr-4">
+                        <button onClick={() => toggleSort("amount")}>
+                          Amount {sortKey === "amount" ? (sortAsc ? "↑" : "↓") : ""}
+                        </button>
+                      </th>
+                      <th className="py-2 pr-4">Invoiced</th>
+                      <th className="py-2 pr-4">Started</th>
+                      <th className="py-2 pr-4">Completed</th>
+                      <th className="py-2 pr-4">Paid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedJobs.map((job) => (
+                      <tr key={job.id} className="border-t border-slate-800">
+                        <td className={`py-3 pr-4 ${job.completed ? "line-through text-slate-500" : ""}`}>
+                          {job.title}
+                        </td>
+                        <td className="py-3 pr-4">{job.client}</td>
+                        <td className="py-3 pr-4">R {job.amount.toFixed(2)}</td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="checkbox"
+                            checked={job.invoiced}
+                            onChange={() => toggleJob(job.id, "invoiced")}
+                            className="h-4 w-4 accent-emerald-400"
+                          />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="checkbox"
+                            checked={job.started}
+                            onChange={() => toggleJob(job.id, "started")}
+                            className="h-4 w-4 accent-emerald-400"
+                          />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="checkbox"
+                            checked={job.completed}
+                            onChange={() => toggleJob(job.id, "completed")}
+                            className="h-4 w-4 accent-emerald-400"
+                          />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <input
+                            type="checkbox"
+                            checked={job.paid}
+                            onChange={() => toggleJob(job.id, "paid")}
+                            className="h-4 w-4 accent-emerald-400"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </section>
       </div>
     </main>
